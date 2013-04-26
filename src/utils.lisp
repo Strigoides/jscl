@@ -89,3 +89,21 @@
 (defun float-to-string (x)
   #+jscl (float-to-string x)
   #+common-lisp (format nil "~f" x))
+
+;; Handy macros for defining builtin functions
+;; Assuming the function name begins with a "!", defines the function with and
+;; without the "!" prefix, to make it easier to test without conflicting with
+;; the existing function or macro in the CL implementation you are testing with
+;; TODO: Rewrite using MACROLET once we have it
+#+common-lisp
+(flet ((name-without-! (symbol)
+         (intern (subseq (string symbol) 1))))
+  (defmacro !defun (name args &body body)
+    `(progn
+       (defun ,name ,args ,@body)
+       ; fset doesn't exist outside of jscl 
+       #+jscl (fset ',(name-without-! name) #',name))) 
+  (defmacro !defmacro (name args &body body)
+    `(progn
+       (defmacro ,name ,args ,@body)
+       #+jscl (fset ',(name-without-! name) #',name))))
