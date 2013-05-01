@@ -624,13 +624,21 @@
     "return " (ls-compile nil) ";" *newline*))
 
 (define-compilation disassemble (func)
-  (cond
-    ((and (listp func) (eq (car func) 'lambda))
-     (ls-compile
-       `(progn
-          (write-string ,(compile-lambda (cadr func) (cddr func)))
-          (write-line "")
-          nil)))))
+  (if (and (listp func) (eq (car func) 'lambda))
+    (ls-compile
+      `(progn
+         (write-string ,(compile-lambda (cadr func) (cddr func)))
+         (write-line "")
+         nil))
+    (js!selfcall
+      "lisp.write("
+      (js!selfcall
+        "var func = " (ls-compile func) ";" *newline*
+        "return (typeof func == 'function' ? func : func.fvalue);"
+        *newline*)
+      ".toString());" *newline*
+      (ls-compile '(write-line "")) ";" *newline*
+      "return " (ls-compile nil) ";" *newline*)))
 
 (define-compilation function (x)
   (cond
