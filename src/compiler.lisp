@@ -623,6 +623,15 @@
     "}"
     "return " (ls-compile nil) ";" *newline*))
 
+(define-compilation disassemble (func)
+  (cond
+    ((and (listp func) (eq (car func) 'lambda))
+     (ls-compile
+       `(progn
+          (write-string ,(compile-lambda (cadr func) (cddr func)))
+          (write-line "")
+          nil)))))
+
 (define-compilation function (x)
   (cond
     ((and (listp x) (eq (car x) 'lambda))
