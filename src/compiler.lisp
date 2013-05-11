@@ -703,12 +703,29 @@
                bindings))
    "}" *newline*))
 
+;;; Return the subset of VARS that are used in BODY.
+(defun used-vars (vars body)
+  (if (atom body)
+    (when (member body vars) (list body))
+    (unless (eq (car body) 'quote) ; ignore quoted sections
+      (append (used-vars vars (car body))
+              (used-vars vars (cdr body))))))
+
+;;; Return the subset of VARS that are unused in BODY.
+(defun unused-vars (vars body)
+  (let ((used-vars (used-vars vars body)))
+    (dolist (var used-vars)
+      (setq vars (remove var vars))))
+  (remove-if #'special-variable-p vars))
+
 (define-compilation let (bindings &rest body)
   (let* ((bindings (mapcar #'ensure-list bindings))
          (variables (mapcar #'first bindings))
          (cvalues (mapcar #'ls-compile (mapcar #'second bindings)))
          (*environment* (extend-local-env (remove-if #'special-variable-p variables)))
          (dynamic-bindings))
+    (mapcar (lambda (var) (warn "~S is defined but never used" var))
+            (unused-vars variables body))
     (code "(function("
           (join (mapcar (lambda (x)
                           (if (special-variable-p x)
