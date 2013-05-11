@@ -240,9 +240,10 @@
   (write-string *newline*)
   x)
 
-(defun warn (string)
+(defun warn (fmt &rest args)
   (write-string "WARNING: ")
-  (write-line string))
+  (apply #'format t fmt args)
+  (write-line ""))
 
 (defun print (x)
   (write-line (prin1-to-string x))
