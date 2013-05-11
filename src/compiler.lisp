@@ -418,6 +418,9 @@
                         keyword-arguments
                         rest-argument)
       (parse-lambda-list ll)
+    (warn-unused (append required-arguments optional-arguments
+                         keyword-arguments  (list rest-argument))
+                 body)
     (multiple-value-bind (body decls documentation)
         (parse-body body :declarations t :docstring t)
       (declare (ignore decls))
@@ -718,14 +721,17 @@
       (setq vars (remove var vars))))
   (remove-if #'special-variable-p vars))
 
+(defun warn-unused (vars body)
+  (mapcar (lambda (var) (warn "~S is defined but never used" var))
+          (unused-vars vars body)))
+
 (define-compilation let (bindings &rest body)
   (let* ((bindings (mapcar #'ensure-list bindings))
          (variables (mapcar #'first bindings))
          (cvalues (mapcar #'ls-compile (mapcar #'second bindings)))
          (*environment* (extend-local-env (remove-if #'special-variable-p variables)))
          (dynamic-bindings))
-    (mapcar (lambda (var) (warn "~S is defined but never used" var))
-            (unused-vars variables body))
+    (warn-unused variables body)
     (code "(function("
           (join (mapcar (lambda (x)
                           (if (special-variable-p x)
