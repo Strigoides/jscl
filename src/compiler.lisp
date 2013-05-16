@@ -418,12 +418,18 @@
                         keyword-arguments
                         rest-argument)
       (parse-lambda-list ll)
-    (warn-unused (append required-arguments optional-arguments
-                         keyword-arguments  (list rest-argument))
-                 body)
     (multiple-value-bind (body decls documentation)
         (parse-body body :declarations t :docstring t)
-      (declare (ignore decls))
+      (let ((ignores (apply #'append
+                            (mapcar #'cdadr (remove-if-not
+                                               (lambda (decl)
+                                                 (eql (caadr decl) 'ignore))
+                                               decls)))))
+        (warn-unused (remove-if
+                       (lambda (var) (member var ignores))
+                       (append required-arguments optional-arguments
+                               keyword-arguments (list rest-argument))  )
+                     body))
       (let ((n-required-arguments (length required-arguments))
             (n-optional-arguments (length optional-arguments))
             (*environment* (extend-local-env
@@ -721,8 +727,9 @@
       (setq vars (remove var vars))))
   (remove-if #'special-variable-p vars))
 
-(defun warn-unused (vars body)
-  (mapcar (lambda (var) (warn "~S is defined but never used" var))
+(defun warn-unused (vars body &key ignores)
+  (mapcar (lambda (var)
+            (warn "In:~%~S~%~S is defined but never used" body var))
           (unused-vars vars body)))
 
 (define-compilation let (bindings &rest body)
