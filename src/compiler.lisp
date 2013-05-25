@@ -1021,6 +1021,34 @@
                         (lambda (,args)
                           (code "return " ,@body ";" *newline*))))
 
+(define-builtin make-integer (x)
+  (code "{value: " x ", type: 'integer'}"))
+
+(define-builtin make-float (x)
+  (code "{value: " x ", type: 'float'}"))
+
+(define-builtin make-rational (numerator denominator)
+  (code "{numerator: "    numerator
+        ", denominator: " denominator
+        ", type: "        "'rational'"))
+
+(define-builtin make-complex (realpart imagpart)
+  (code "{realpart: "  realpart
+        ", imagpart: " imagpart
+        ", type: "     "'complex'"))
+
+(define-builtin numerator (rational)
+  (code rational ".numerator"))
+
+(define-builtin denominator (rational)
+  (code rational ".denominator"))
+
+(define-builtin realpart (complex)
+  (code complex ".realpart"))
+
+(define-builtin imagpart (complex)
+  (code complex ".imagpart"))
+
 (defun num-op-num (x op y)
   (type-check (("x" "number" x) ("y" "number" y))
     (code "x" op "y")))
@@ -1078,8 +1106,14 @@
 (define-builtin-comparison = "==")
 (define-builtin-comparison /= "!=")
 
-(define-builtin numberp (x)
-  (js!bool (code "(typeof (" x ") == \"number\")")))
+(define-builtin integerp (x)
+  (code "(" x ".type === 'integer')"))
+(define-builtin floatp (x)
+  (code "(" x ".type === 'float')"))
+(define-builtin rationalp (x)
+  (code "(" x ".type === 'rational')"))
+(define-builtin complexp (x)
+  (code "(" x ".type === 'complex')"))
 
 (define-builtin floor (x)
   (type-check (("x" "number" x))
@@ -1203,6 +1237,9 @@
 
 (define-builtin string-upcase (x)
   (code "make_lisp_string(xstring(" x ").toUpperCase())"))
+
+(define-builtin string-downcase (x)
+  (code "make_lisp_string(xstring(" x ").toLowerCase())"))
 
 (define-builtin string-length (x)
   (code x ".length"))
