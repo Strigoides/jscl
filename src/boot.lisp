@@ -249,7 +249,7 @@
          (tagbody ,@forms)))))
 
 
-;;; Go on growing the Lisp language in Ecmalisp, with more high level
+;;; Go on growing the Lisp language in JSCL, with more high level
 ;;; utilities as well as correct versions of other constructions.
 
 (defun append-two (list1 list2)
