@@ -70,19 +70,37 @@
       (read-sequence seq in)
       seq)))
 
-(defun ls-compile-file (filename out &key print)
+(defconstant +obj-file-extension+ "jso")
+
+(defun replace-extension (filename new-extension)
+  (do* ((filename (namestring filename))
+        (len (length filename))
+        (i (1- len) (1- i))
+        (ch (char filename i) (char filename i)))
+    ((or (zerop i) (char= ch #\.))
+     (if (zerop i)
+       (return-from replace-extension filename)
+       (concatenate 'string (subseq filename 0 (1+ i)) new-extension)))))
+
+(defun ls-compile-file (filename &key print)
   (let ((*compiling-file* t)
-        (*compile-print-toplevels* print))
+        (*compile-print-toplevels* print)
+        (obj (replace-extension filename +obj-file-extension+)))
+    (when (and (probe-file obj)
+               (< (file-write-date filename) (file-write-date obj)))
+      (return-from ls-compile-file))
     (let* ((source (read-whole-file filename))
            (in (make-string-stream source)))
       (format t "Compiling ~a...~%" filename)
-      (loop
-         with eof-mark = (gensym)
-         for x = (ls-read in nil eof-mark)
-         until (eq x eof-mark)
-         do (let ((compilation (ls-compile-toplevel x)))
-              (when (plusp (length compilation))
-                (write-string compilation out)))))))
+      (with-open-file (out obj :direction :output :if-exists :supersede
+                           :if-does-not-exist :create)
+        (loop
+          with eof-mark = (gensym)
+          for x = (ls-read in nil eof-mark)
+          until (eq x eof-mark)
+          do (let ((compilation (ls-compile-toplevel x)))
+               (when (plusp (length compilation))
+                 (write-string compilation out))))))))
 
 (defun dump-global-environment (stream)
   (flet ((late-compile (form)
@@ -117,14 +135,29 @@
       (write-string (read-whole-file (source-pathname "prelude.js")) out)
       (dolist (input *source*)
         (when (member (cadr input) '(:target :both))
-          (ls-compile-file (source-pathname (car input) :type "lisp") out)))
+          (let ((file (source-pathname (car input) :type "lisp")))
+            (ls-compile-file file)
+            (write-string (read-whole-file
+                            (replace-extension file +obj-file-extension+))
+                          out))))
       (dump-global-environment out))
     ;; Tests
+    (dolist (input (append (directory "tests.lisp")
+                           (directory "tests/*.lisp")
+                           (directory "tests-report.lisp")))
+      (ls-compile-file input))
     (with-open-file (out "tests.js" :direction :output :if-exists :supersede)
-      (dolist (input (append (directory "tests.lisp")
-                             (directory "tests/*.lisp")
-                             (directory "tests-report.lisp")))
-        (ls-compile-file input out)))))
+      (write-string (read-whole-file
+                      (replace-extension "tests.lisp" +obj-file-extension+))
+                    out)
+      (dolist (test (directory "tests/*.lisp"))
+        (write-string (read-whole-file
+                        (replace-extension test +obj-file-extension+))
+                      out))
+      (write-string (read-whole-file
+                      (replace-extension "tests-report.lisp"
+                                         +obj-file-extension+))
+                    out))))
 
 
 ;;; Run the tests in the host Lisp implementation. It is a quick way

@@ -2,6 +2,7 @@
 *.fasl
 *.fas
 *.lib
+*.jso
 \#*
 jscl.js
 tests.js
