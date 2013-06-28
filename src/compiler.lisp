@@ -1573,7 +1573,7 @@
       (t
        (when *compile-print-toplevels*
          (let ((form-string (prin1-to-string sexp)))
-           (format t "Compiling ~a..." (truncate-string form-string))))
+           (format t "Compiling ~a...~%" (truncate-string form-string))))
        (let ((code (ls-compile sexp multiple-value-p)))
          (code (join-trailing (get-toplevel-compilations)
                               (code ";" *newline*))

@@ -122,6 +122,7 @@
         (setq *gensym-counter* ,*gensym-counter*)))
     (late-compile `(setq *literal-counter* ,*literal-counter*))))
 
+(defvar *verbosity* nil) ; Set by make.sh when `verbose' is passed
 
 (defun bootstrap ()
   (let ((*features* (cons :jscl *features*))
