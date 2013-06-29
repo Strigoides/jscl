@@ -86,21 +86,46 @@
   (let ((*compiling-file* t)
         (*compile-print-toplevels* print)
         (obj (replace-extension filename +obj-file-extension+)))
-    (when (and (probe-file obj)
-               (< (file-write-date filename) (file-write-date obj)))
-      (return-from ls-compile-file))
-    (let* ((source (read-whole-file filename))
-           (in (make-string-stream source)))
-      (format t "Compiling ~a...~%" filename)
-      (with-open-file (out obj :direction :output :if-exists :supersede
-                           :if-does-not-exist :create)
-        (loop
-          with eof-mark = (gensym)
-          for x = (ls-read in nil eof-mark)
-          until (eq x eof-mark)
-          do (let ((compilation (ls-compile-toplevel x)))
-               (when (plusp (length compilation))
-                 (write-string compilation out))))))))
+    (cond
+      ((and (probe-file obj)
+            (< (file-write-date filename) (file-write-date obj)))
+       (format t "Loading environment from ~A...~%" obj)
+       (with-open-file (o obj)
+         ;; Read bindings and literals from the object file
+         (macrolet ((push-list (list place)
+                      `(setf ,place (append ,list ,place))))
+           (push-list (read o) *literal-table*)
+           (push-list (read o) (lexenv-variable *environment*))
+           (push-list (read o) (lexenv-function *environment*)))))
+      (t
+       (let* ((source (read-whole-file filename))
+              (in (make-string-stream source))
+              ;; Keep track of what bindings and literals are currently at the
+              ;; front of the environment and literal table, so that we can
+              ;; detect which ones are new when writing to the object file.
+              ;; Ignore blocks and gotags, as they cannot persist across files
+              (front-literal (car *literal-table*))
+              (front-var     (car (lexenv-variable *environment*)))
+              (front-func    (car (lexenv-function *environment*))))
+         (format t "Compiling ~a...~%" filename)
+         (let ((compilations
+                 (loop with eof-mark = (gensym)
+                       for x = (ls-read in nil eof-mark)
+                       until (eql x eof-mark)
+                       for compilation = (ls-compile-toplevel x)
+                       when (plusp (length compilation))
+                         collect compilation)))
+           (with-open-file (out obj :direction :output :if-exists :supersede
+                                :if-does-not-exist :create)
+             (flet ((collect-new (source old-head)
+                      (loop for thing in source
+                            until (eql thing old-head)
+                            collect thing)))
+               (format out "~S~&~S~&~S~&~{~A~}"
+                       (collect-new *literal-table* front-literal)
+                       (collect-new (lexenv-variable *environment*) front-var)
+                       (collect-new (lexenv-function *environment*) front-func)
+                       compilations)))))))))
 
 (defun dump-global-environment (stream)
   (flet ((late-compile (form)
@@ -122,6 +147,15 @@
         (setq *gensym-counter* ,*gensym-counter*)))
     (late-compile `(setq *literal-counter* ,*literal-counter*))))
 
+(defun append-object (source-name out)
+  (let ((name (replace-extension source-name +obj-file-extension+)))
+    (with-open-file (in name)
+      (loop repeat 3 do (read in)) ; Skip literals and bindings
+      (loop with eof = (gensym)
+            for char = (read-char in nil eof)
+            until (eql char eof)
+            do (write-char char out)))))
+
 (defvar *verbosity* nil) ; Set by make.sh when `verbose' is passed
 
 (defun bootstrap ()
@@ -137,28 +171,16 @@
       (dolist (input *source*)
         (when (member (cadr input) '(:target :both))
           (let ((file (source-pathname (car input) :type "lisp")))
-            (ls-compile-file file)
-            (write-string (read-whole-file
-                            (replace-extension file +obj-file-extension+))
-                          out))))
+            (ls-compile-file file :print *verbosity*)
+            (append-object file out))))
       (dump-global-environment out))
     ;; Tests
-    (dolist (input (append (directory "tests.lisp")
-                           (directory "tests/*.lisp")
-                           (directory "tests-report.lisp")))
-      (ls-compile-file input))
     (with-open-file (out "tests.js" :direction :output :if-exists :supersede)
-      (write-string (read-whole-file
-                      (replace-extension "tests.lisp" +obj-file-extension+))
-                    out)
-      (dolist (test (directory "tests/*.lisp"))
-        (write-string (read-whole-file
-                        (replace-extension test +obj-file-extension+))
-                      out))
-      (write-string (read-whole-file
-                      (replace-extension "tests-report.lisp"
-                                         +obj-file-extension+))
-                    out))))
+      (dolist (file (append (list "tests.lisp")
+                            (directory "tests/*.lisp")
+                            (list "tests-report.lisp")))
+        (ls-compile-file file :print *verbosity*)
+        (append-object file out)))))
 
 
 ;;; Run the tests in the host Lisp implementation. It is a quick way
